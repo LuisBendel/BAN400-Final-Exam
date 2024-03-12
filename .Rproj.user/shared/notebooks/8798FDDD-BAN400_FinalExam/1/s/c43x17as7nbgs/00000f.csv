@@ -1,0 +1,4 @@
+"0","# read data and convert to numeric"
+"0","bacedata <- read_csv(""BACEDATA.csv"", skip = 2, show_col_types = FALSE) %>%"
+"0","  select(-OBS, -CODE, -COUNTRY) %>%"
+"0","  map_df(., as.numeric)"

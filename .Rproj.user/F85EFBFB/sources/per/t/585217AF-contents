@@ -1,0 +1,241 @@
+# WS1 suggested solutions: 
+
+
+# Exercise 4: 
+library(readr)
+library(fpp3)
+library(tidyverse)
+
+theme_set(theme_bw())
+
+citytemp <- read_csv2(
+  "https://raw.githubusercontent.com/holleland/BAN430/master/data/citytemp.csv")
+citytemp.ts <- citytemp %>% 
+  mutate(date = as.Date(date, format = "%d.%m.%Y")) %>% 
+  filter(!is.na(date)) %>%  # Remove NA-values
+  # Create tsibble object
+  as_tsibble(index = date, 
+             key = c("name","station"))
+citytemp.ts
+
+#a) 
+citytemp.ts %>% autoplot(meanTemp)
+citytemp.ts %>% autoplot(meanTemp) + facet_wrap(~name)
+
+#b)
+citytemp.ts %>% fill_gaps() %>%  gg_season(meanTemp)
+
+# c) NB: Not a good graphic for
+#        daily observations and yearly season!!
+citytemp.ts %>% fill_gaps()%>%  gg_subseries(meanTemp)
+
+
+# Exercise 5:
+citytempweek <- citytemp.ts %>%  
+  group_by(name, station) %>% 
+  index_by(week = ~yearweek(.)) %>% 
+  summarize(meanTemp = mean(meanTemp, na.rm=T))
+
+citytempmonth <- citytemp.ts %>%  
+  group_by(name, station) %>% 
+  index_by(month = ~yearmonth(.)) %>% 
+  summarize(meanTemp = mean(meanTemp, na.rm=T))
+
+
+citytempweek %>% autoplot(meanTemp)+facet_wrap(~name)
+citytempweek %>% fill_gaps() %>%  gg_season(meanTemp)
+
+citytempmonth %>% autoplot(meanTemp)+facet_wrap(~name)
+citytempmonth %>% gg_subseries(meanTemp)
+
+# Exercise 6: 
+citytemp.ts %>%
+  as_tibble() %>% 
+  select(-station) %>% 
+  pivot_wider(values_from=meanTemp, 
+              names_from=name) %>% 
+  GGally::ggpairs(columns = 2:5)
+
+
+# Exercise 7:
+
+bergen <- citytemp.ts %>% 
+  filter(station == "SN50540") %>% 
+  fill_gaps()
+bergen %>% 
+  ACF(meanTemp) %>% 
+  autoplot()
+bergen %>% 
+  ACF(meanTemp, 
+      lag_max = 400) %>% 
+  autoplot()
+
+# Exercise 8:
+set.seed(123)
+tsibble(
+  t = 1:100,
+  wn = rnorm(100, sd = 3),
+  index = t
+) %>% 
+  ACF(wn) %>% autoplot()
+
+# Exercise 9:
+wind <- readRDS("C:/Users/s15052/Downloads/OffshoreWindtwoLocationsFiveYears.rds")
+wind <- wind %>% as_tsibble(index = datetime, key = Place) %>% 
+  mutate(powerprod = powerprod / 1e6)
+wind %>% autoplot()+
+  facet_wrap(~Place)
+
+wind.day <- wind %>% 
+  group_by(Place) %>% 
+  index_by(day =~as.Date(.)) %>% 
+  summarize(powerprod = mean(powerprod))
+
+wind.week <- wind %>% 
+  group_by(Place) %>% 
+  index_by(day =~yearweek(.)) %>% 
+  summarize(powerprod = mean(powerprod))
+
+wind.month <- wind %>% 
+  group_by(Place) %>% 
+  index_by(day =~yearmonth(.)) %>% 
+  summarize(powerprod = mean(powerprod))
+
+# b) 
+wind %>% autoplot()
+wind.day %>% autoplot()
+wind.week %>% autoplot()
+wind.month %>% autoplot()
+
+wind %>% gg_season()
+wind.day %>% gg_season()
+wind.week %>% gg_season()
+wind.month %>% gg_season()
+
+wind %>% gg_subseries()
+wind.day %>% gg_subseries()
+wind.week %>% gg_subseries()
+wind.month %>% gg_subseries()
+
+# c)
+wind %>%  
+  as_tibble() %>% 
+  pivot_wider(names_from = Place, values_from = powerprod) %>% 
+  rename(SN2 = 2, UN=3) %>% 
+  ggplot(aes(x=SN2, y = UN))+geom_point()
+wind.day %>%  
+  as_tibble() %>% 
+  pivot_wider(names_from = Place, values_from = powerprod) %>% 
+  rename(SN2 = 2, UN=3) %>% 
+  ggplot(aes(x=SN2, y = UN))+geom_point()
+wind.week %>%  
+  as_tibble() %>% 
+  pivot_wider(names_from = Place, values_from = powerprod) %>% 
+  rename(SN2 = 2, UN=3) %>% 
+  ggplot(aes(x=SN2, y = UN))+geom_point()
+wind.month %>%  
+  as_tibble() %>% 
+  pivot_wider(names_from = Place, values_from = powerprod) %>% 
+  rename(SN2 = 2, UN=3) %>% 
+  ggplot(aes(x=SN2, y = UN))+geom_point()
+
+
+# d) It depends on the scale. On hourly scale the 
+# noise of the data dominates, but as we aggregate 
+# we get a stronger (linear) relationship.
+
+# e) 
+wind.month %>%  
+  as_tibble() %>% 
+  pivot_wider(names_from = Place, values_from = powerprod) %>% 
+  rename(SN2 = 2, UN=3) %>% 
+  ggplot(aes(x=SN2, y = UN))+geom_point()+
+  geom_abline(slope = 1)
+# Based on the scatterplot it seems SN2 have a higher 
+# production than UN on a general basis. 
+wind %>% 
+  as_tibble() %>% 
+  group_by(Place) %>% 
+  summarize(meanP = mean(powerprod))
+
+# Exericse 10:
+wind.day %>% 
+  model(decom = STL(powerprod)) %>% 
+  components() %>% 
+  autoplot()
+wind.month %>% 
+  model(decom = STL(powerprod)) %>% 
+  components() %>% 
+  autoplot()
+
+# STL can handle all time scales and does not give NAs
+
+# Exercise 11:
+wholesale  <- read.csv2(
+  "https://raw.githubusercontent.com/holleland/BAN430/master/data/wholesale_and_retails_index_norway.csv", 
+  sep = ";")
+head(wholesale,3)
+names(wholesale) <- c("month", "index")
+
+# a)
+wholesale <- wholesale %>% 
+  mutate(month = yearmonth(month),
+         index = as.numeric(index)) %>% 
+  as_tsibble(index = month)
+
+# b)
+wholesale %>% autoplot()
+
+# c) 
+models <- wholesale %>% 
+  model(classic = classical_decomposition(index),
+        x11 = X_13ARIMA_SEATS(index ~ x11()),
+        seats = X_13ARIMA_SEATS(index ~ seats()),
+        stl = STL(index)) 
+  
+models %>% 
+  select(classic) %>% 
+  components() %>% 
+  autoplot()
+models %>% 
+  select(x11) %>% 
+  components() %>% 
+  autoplot()
+models %>% 
+  select(seats) %>%
+  components() %>% 
+  autoplot()
+models %>% 
+  select(stl) %>%
+  components() %>% 
+  autoplot()
+
+# d)
+# Try tuning the parameters and compare to the original!
+wholesale %>% 
+  model(stl = STL(index~trend(window = 21)+season(window = "periodic")),
+        stl_default = STL(index)) %>% 
+  components() %>% 
+  autoplot()
+
+# e) I choose the seats method for this. It seems to have the nicest behaving remainder and picks
+# well up the rapid change around covid 19 in the start of 2020.
+models %>% 
+  select(seats,x11) %>%
+  components() %>% 
+  select(month,season_adjust) %>% 
+  autoplot(season_adjust)
+
+# f)
+
+models %>% 
+  select(seats,x11) %>%
+  components() %>% 
+  mutate(detrended = index-trend) %>% 
+  select(month,detrended) %>% 
+  autoplot(detrended)
+
+# g) See exercise 6 on website here: https://holleland.github.io/BAN430/3_exercises.html
+
+# 12: See solutions on canvas.
+
